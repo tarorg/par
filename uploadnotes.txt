@@ -1,0 +1,25 @@
+Here are curl commands to upload files using the form data format:
+Basic file upload with automatic filename:
+Apply
+Copy
+
+curl -X PUT \
+  -F "file=@/path/to/your/file.jpg" \
+  https://par.wetarteam.workers.dev/upload
+
+  Upload with custom filename:
+curl -X PUT \
+  -F "name=custom-name.jpg" \
+  -F "file=@/path/to/your/file.jpg" \
+  https://par.wetarteam.workers.dev/upload
+
+  Upload with explicit path in URL (the name in URL will be overridden if 'name' field is provided):
+curl -X PUT \
+  -F "file=@/path/to/your/file.jpg" \
+  https://par.wetarteam.workers.dev/images/photo.jpg
+
+To test the response, you can add the -v flag for verbose output:
+curl -v -X PUT \
+  -F "file=@/path/to/your/file.jpg" \
+  -F "name=test.jpg" \
+  https://par.wetarteam.workers.dev/upload

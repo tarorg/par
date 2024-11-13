@@ -104,28 +104,44 @@ async function handleGet(env: Env, key: string): Promise<Response> {
 }
 
 async function handlePut(request: Request, key: string, env: Env): Promise<Response> {
-  const contentType = request.headers.get('content-type') || 'application/octet-stream';
-  const contentLength = request.headers.get('content-length');
+  try {
+    // Handle form data upload
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const fileName = formData.get('name') as string | null;
 
-  if (contentLength && parseInt(contentLength) > 100_000_000) { // 100MB limit
-    return new Response('File too large. Use multipart upload for files over 100MB.', { status: 413 });
+    if (!file) {
+      return new Response('No file provided', { status: 400 });
+    }
+
+    // Use provided name or fall back to the uploaded file's name
+    const finalKey = fileName || file.name || key;
+    const contentType = file.type || 'application/octet-stream';
+    const contentLength = file.size.toString();
+
+    if (parseInt(contentLength) > 100_000_000) { // 100MB limit
+      return new Response('File too large. Use multipart upload for files over 100MB.', { status: 413 });
+    }
+
+    const object = await env.MY_BUCKET.put(finalKey, file.stream(), {
+      httpMetadata: {
+        contentType,
+      },
+    });
+
+    return new Response(JSON.stringify({
+      key: finalKey,
+      etag: object.httpEtag,
+      size: parseInt(contentLength),
+      type: contentType
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+  } catch (error) {
+    return new Response(`Upload failed: ${error.message}`, { status: 400 });
   }
-
-  const object = await env.MY_BUCKET.put(key, request.body, {
-    httpMetadata: {
-      contentType,
-    },
-  });
-
-  return new Response(JSON.stringify({
-    key,
-    etag: object.httpEtag,
-    size: parseInt(contentLength || '0'),
-  }), {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
 }
 
 async function handleMultipartUpload(request: Request, env: Env): Promise<Response> {
