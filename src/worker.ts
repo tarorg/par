@@ -3,7 +3,6 @@ import { handleOptions, addCorsHeaders } from './cors';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
       return handleOptions();
     }
@@ -47,8 +46,9 @@ export default {
       }
 
       return addCorsHeaders(response);
-    } catch (error) {
-      const errorResponse = new Response(`Error: ${error.message}`, { status: 500 });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorResponse = new Response(`Error: ${message}`, { status: 500 });
       return addCorsHeaders(errorResponse);
     }
   },
@@ -61,8 +61,8 @@ async function handleList(
   limit?: string | null
 ): Promise<Response> {
   const options: R2ListOptions = {
-    prefix,
-    cursor,
+    prefix: prefix ?? undefined,
+    cursor: cursor ?? undefined,
     limit: limit ? parseInt(limit) : undefined,
   };
 
@@ -76,7 +76,7 @@ async function handleList(
       type: obj.httpMetadata?.contentType,
     })),
     truncated: listed.truncated,
-    cursor: listed.cursor,
+    cursor: listed.truncated ? listed.cursor : undefined,
   };
 
   return new Response(JSON.stringify(response), {
@@ -137,7 +137,6 @@ async function handleMultipartUpload(request: Request, env: Env): Promise<Respon
   }>();
 
   if (!uploadId) {
-    // Initialize multipart upload
     const upload = await env.MY_BUCKET.createMultipartUpload(key);
     return new Response(JSON.stringify({ uploadId: upload.uploadId }), {
       headers: { 'Content-Type': 'application/json' }
@@ -145,7 +144,10 @@ async function handleMultipartUpload(request: Request, env: Env): Promise<Respon
   }
 
   if (partNumber !== undefined) {
-    // Upload part
+    if (!request.body) {
+      return new Response('Request body is required', { status: 400 });
+    }
+    
     const upload = await env.MY_BUCKET.resumeMultipartUpload(key, uploadId);
     const part = await upload.uploadPart(partNumber, request.body);
     
@@ -158,7 +160,6 @@ async function handleMultipartUpload(request: Request, env: Env): Promise<Respon
   }
 
   if (parts) {
-    // Complete multipart upload
     const upload = await env.MY_BUCKET.resumeMultipartUpload(key, uploadId);
     const object = await upload.complete(parts);
     
